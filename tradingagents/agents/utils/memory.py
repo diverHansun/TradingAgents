@@ -1,25 +1,48 @@
 import chromadb
 from chromadb.config import Settings
 from openai import OpenAI
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+import os
 
 
 class FinancialSituationMemory:
     def __init__(self, name, config):
-        if config["backend_url"] == "http://localhost:11434/v1":
-            self.embedding = "nomic-embed-text"
-        else:
-            self.embedding = "text-embedding-3-small"
-        self.client = OpenAI(base_url=config["backend_url"])
+        self.config = config
         self.chroma_client = chromadb.Client(Settings(allow_reset=True))
         self.situation_collection = self.chroma_client.create_collection(name=name)
+        
+        # Initialize the appropriate embedding client based on the LLM provider
+        if config["llm_provider"].lower() == "google":
+            # Use Google's embedding model
+            self.embedding_model = "text-embedding-004"  # Google's embedding model
+            self.embedding_client = GoogleGenerativeAIEmbeddings(
+                model=self.embedding_model,
+                google_api_key=os.getenv("GOOGLE_API_KEY")
+            )
+            self.provider_type = "google"
+        elif config["backend_url"] == "http://localhost:11434/v1":
+            self.embedding_model = "nomic-embed-text"
+            self.client = OpenAI(base_url=config["backend_url"])
+            self.provider_type = "openai_compatible"
+        else:
+            self.embedding_model = "text-embedding-3-small"
+            self.client = OpenAI(base_url=config["backend_url"])
+            self.provider_type = "openai"
 
     def get_embedding(self, text):
-        """Get OpenAI embedding for a text"""
-        
-        response = self.client.embeddings.create(
-            model=self.embedding, input=text
-        )
-        return response.data[0].embedding
+        """Get embedding for a text based on the configured provider"""
+        if self.provider_type == "google":
+            # Google's embedding method
+            return self.embedding_client.embed_query(text)
+        else:
+            # OpenAI compatible method
+            if hasattr(self, 'client'):
+                response = self.client.embeddings.create(
+                    model=self.embedding_model, input=text
+                )
+                return response.data[0].embedding
+            else:
+                raise ValueError(f"Client not properly initialized for provider type: {self.provider_type}")
 
     def add_situations(self, situations_and_advice):
         """Add financial situations and their corresponding advice. Parameter is a list of tuples (situation, rec)"""
