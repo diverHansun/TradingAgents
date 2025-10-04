@@ -1,9 +1,12 @@
 env/
+.venv/
 __pycache__/
 .DS_Store
 *.csv
 src/
 eval_results/
 eval_data/
+results/
 *.egg-info/
 .env
+.idea/
